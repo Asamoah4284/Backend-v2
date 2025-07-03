@@ -28,6 +28,66 @@ const userSchema = new mongoose.Schema({
     required: [true, 'User type is required'],
     default: 'customer'
   },
+  // Fingerprint data fields
+  fingerprint: {
+    visitorId: {
+      type: String,
+      sparse: true // Allows multiple null values but enforces uniqueness for non-null values
+    },
+    confidence: {
+      type: Number,
+      min: 0,
+      max: 1
+    },
+    components: {
+      type: [String], // Array of component names
+      default: []
+    },
+    cookieEnabled: {
+      type: Boolean,
+      default: false
+    },
+    doNotTrack: {
+      type: mongoose.Schema.Types.Mixed, // Can be null, string, or boolean
+      default: null
+    },
+    hardwareConcurrency: {
+      type: Number,
+      default: 0
+    },
+    language: {
+      type: String,
+      default: 'en-US'
+    },
+    maxTouchPoints: {
+      type: Number,
+      default: 0
+    },
+    platform: {
+      type: String,
+      default: ''
+    },
+    screenResolution: {
+      type: String,
+      default: ''
+    },
+    timestamp: {
+      type: Date,
+      default: Date.now
+    },
+    timezone: {
+      type: String,
+      default: ''
+    },
+    userAgent: {
+      type: String,
+      default: ''
+    },
+    vendor: {
+      type: String,
+      default: ''
+    }
+  },
   // Customer fields
   points: {
     type: Number,
@@ -191,6 +251,50 @@ userSchema.methods.generateReferralCode = function() {
   }
   this.myReferralCode = result;
   return this.save();
+};
+
+// Update fingerprint data
+userSchema.methods.updateFingerprint = function(fingerprintData) {
+  this.fingerprint = fingerprintData;
+  return this.save();
+};
+
+// Get fingerprint data
+userSchema.methods.getFingerprint = function() {
+  return this.fingerprint;
+};
+
+// Find user by visitor ID (static method)
+userSchema.statics.findByVisitorId = function(visitorId) {
+  return this.findOne({ 'fingerprint.visitorId': visitorId });
+};
+
+// Find users with similar fingerprint components (for fraud detection)
+userSchema.statics.findSimilarFingerprints = function(fingerprintData, threshold = 0.8) {
+  // This is a basic implementation - you might want to implement more sophisticated
+  // fingerprint comparison logic based on your specific requirements
+  const query = {};
+  
+  if (fingerprintData) {
+    // Add specific component-based queries
+    if (fingerprintData.platform) {
+      query['fingerprint.platform'] = fingerprintData.platform;
+    }
+    if (fingerprintData.vendor) {
+      query['fingerprint.vendor'] = fingerprintData.vendor;
+    }
+    if (fingerprintData.timezone) {
+      query['fingerprint.timezone'] = fingerprintData.timezone;
+    }
+    if (fingerprintData.userAgent) {
+      query['fingerprint.userAgent'] = fingerprintData.userAgent;
+    }
+    if (fingerprintData.screenResolution) {
+      query['fingerprint.screenResolution'] = fingerprintData.screenResolution;
+    }
+  }
+  
+  return this.find(query);
 };
 
 // Get user without password

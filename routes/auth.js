@@ -10,6 +10,7 @@ router.post('/register', registerValidation, handleValidationErrors, async (req,
     const { 
       email, 
       password, 
+      confirmPassword,
       name, 
       userType,
       enteredReferralCode,
@@ -19,7 +20,8 @@ router.post('/register', registerValidation, handleValidationErrors, async (req,
       phone,
       country,
       city,
-      website
+      website,
+      fingerprint
     } = req.body;
 
     // Check if user already exists
@@ -56,6 +58,11 @@ router.post('/register', registerValidation, handleValidationErrors, async (req,
       userType,
       enteredReferralCode: enteredReferralCode || null
     };
+
+    // Add fingerprint data if provided
+    if (fingerprint) {
+      userData.fingerprint = fingerprint;
+    }
 
     // Add artisan-specific fields if user type is artisan
     if (userType === 'artisan') {
@@ -100,7 +107,8 @@ router.post('/register', registerValidation, handleValidationErrors, async (req,
         businessName: user.businessName,
         businessCategory: user.businessCategory,
         country: user.country,
-        city: user.city
+        city: user.city,
+        fingerprint: user.fingerprint
       },
       token
     };
@@ -127,7 +135,7 @@ router.post('/register', registerValidation, handleValidationErrors, async (req,
 // POST /auth/login
 router.post('/login', loginValidation, handleValidationErrors, async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const { email, password, fingerprint } = req.body;
 
     // Find user by email
     const user = await User.findOne({ email });
@@ -143,6 +151,12 @@ router.post('/login', loginValidation, handleValidationErrors, async (req, res) 
       return res.status(401).json({
         error: 'Invalid email or password'
       });
+    }
+
+    // Update fingerprint data if provided
+    if (fingerprint) {
+      user.fingerprint = fingerprint;
+      await user.save();
     }
 
     // Generate JWT token
@@ -167,7 +181,8 @@ router.post('/login', loginValidation, handleValidationErrors, async (req, res) 
         website: user.website,
         isActive: user.isActive,
         createdAt: user.createdAt,
-        updatedAt: user.updatedAt
+        updatedAt: user.updatedAt,
+        fingerprint: user.fingerprint
       },
       token
     });
@@ -175,6 +190,70 @@ router.post('/login', loginValidation, handleValidationErrors, async (req, res) 
     console.error('Login error:', error);
     res.status(500).json({
       error: 'Login failed',
+      message: error.message
+    });
+  }
+});
+
+// PUT /auth/update-fingerprint
+router.put('/update-fingerprint', async (req, res) => {
+  try {
+    const { userId, fingerprint } = req.body;
+
+    if (!userId || !fingerprint) {
+      return res.status(400).json({
+        error: 'User ID and fingerprint data are required'
+      });
+    }
+
+    // Find user by ID
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({
+        error: 'User not found'
+      });
+    }
+
+    // Update fingerprint data
+    await user.updateFingerprint(fingerprint);
+
+    res.json({
+      message: 'Fingerprint updated successfully',
+      user: {
+        id: user._id,
+        email: user.email,
+        name: user.name,
+        fingerprint: user.fingerprint
+      }
+    });
+  } catch (error) {
+    console.error('Fingerprint update error:', error);
+    res.status(500).json({
+      error: 'Fingerprint update failed',
+      message: error.message
+    });
+  }
+});
+
+// GET /auth/fingerprint/:userId
+router.get('/fingerprint/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({
+        error: 'User not found'
+      });
+    }
+
+    res.json({
+      fingerprint: user.getFingerprint()
+    });
+  } catch (error) {
+    console.error('Get fingerprint error:', error);
+    res.status(500).json({
+      error: 'Failed to get fingerprint data',
       message: error.message
     });
   }
