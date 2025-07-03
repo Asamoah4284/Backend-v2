@@ -310,4 +310,71 @@ router.get('/users', auth, async (req, res) => {
   }
 });
 
+// GET /users/:userId - Get specific user details
+router.get('/users/:userId', auth, async (req, res) => {
+  try {
+    const { userId } = req.params;
+    
+    // Validate userId format
+    if (!userId || userId.length !== 24) {
+      return res.status(400).json({
+        error: 'Invalid user ID format',
+        message: 'User ID must be a valid 24-character MongoDB ObjectId'
+      });
+    }
+    
+    // Find user by ID
+    const user = await User.findById(userId).select('-password'); // Exclude password
+    
+    if (!user) {
+      return res.status(404).json({
+        error: 'User not found',
+        message: 'No user found with the provided ID'
+      });
+    }
+    
+    // Format response
+    const userDetails = {
+      id: user._id,
+      name: user.name,
+      email: user.email,
+      userType: user.userType,
+      points: user.points,
+      myReferralCode: user.myReferralCode,
+      enteredReferralCode: user.enteredReferralCode,
+      businessName: user.businessName,
+      businessCategory: user.businessCategory,
+      businessDescription: user.businessDescription,
+      phone: user.phone,
+      country: user.country,
+      city: user.city,
+      website: user.website,
+      isActive: user.isActive,
+      createdAt: user.createdAt,
+      updatedAt: user.updatedAt,
+      fingerprint: user.fingerprint // Include fingerprint data if available
+    };
+    
+    res.json({
+      message: 'User details retrieved successfully',
+      user: userDetails
+    });
+  } catch (error) {
+    console.error('Get user details error:', error);
+    
+    // Handle invalid ObjectId format
+    if (error.name === 'CastError' && error.kind === 'ObjectId') {
+      return res.status(400).json({
+        error: 'Invalid user ID format',
+        message: 'User ID must be a valid 24-character MongoDB ObjectId'
+      });
+    }
+    
+    res.status(500).json({
+      error: 'Failed to fetch user details',
+      message: error.message
+    });
+  }
+});
+
 module.exports = router; 
