@@ -67,6 +67,35 @@ Register a new user with fingerprint data.
 }
 ```
 
+### Pre-Registration Fraud Check
+
+You can check for fraud before registration:
+
+```javascript
+const checkFraud = async (fingerprint, referralCode) => {
+  const response = await fetch('/auth/check-fingerprint-fraud', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      fingerprint: fingerprint,
+      referralCode: referralCode
+    })
+  });
+  
+  const result = await response.json();
+  
+  if (result.fraudDetected) {
+    console.log('Fraud detected:', result.checks);
+    // Handle fraud case - user can still register but won't get points
+  } else {
+    console.log('Fingerprint check passed');
+    // Proceed with registration
+  }
+};
+```
+
 ### 2. Login with Fingerprint
 
 **POST** `/auth/login`
@@ -143,6 +172,54 @@ Retrieve fingerprint data for a specific user.
   "fingerprint": {
     // User's fingerprint data
   }
+}
+```
+
+### 5. Check Fingerprint Fraud
+
+**POST** `/auth/check-fingerprint-fraud`
+
+Check for potential fraud before registration or referral.
+
+**Request Body:**
+```javascript
+{
+  "fingerprint": {
+    // Fingerprint data to check
+  },
+  "referralCode": "ABC12345" // Optional: referral code to check
+}
+```
+
+**Response:**
+```javascript
+{
+  "fraudDetected": false,
+  "checks": {
+    "sameDeviceReferral": false,
+    "multipleAccounts": false,
+    "details": {}
+  },
+  "message": "Fingerprint check passed"
+}
+```
+
+**Fraud Detection Response (when fraud is detected):**
+```javascript
+{
+  "fraudDetected": true,
+  "checks": {
+    "sameDeviceReferral": true,
+    "multipleAccounts": false,
+    "details": {
+      "referrer": {
+        "id": "user_id",
+        "email": "referrer@example.com",
+        "name": "Referrer Name"
+      }
+    }
+  },
+  "message": "Fraud detected in fingerprint data"
 }
 ```
 
@@ -228,6 +305,75 @@ const loginUser = async (credentials) => {
 3. **Fraud Detection**: Use fingerprint data for fraud detection by comparing fingerprints across sessions.
 
 4. **User Consent**: Inform users about fingerprint collection and obtain consent where required.
+
+## Fraud Detection
+
+The system includes comprehensive fraud detection mechanisms:
+
+### Types of Fraud Detected
+
+1. **Same Device Referral Fraud**: Prevents users from referring themselves using the same device
+2. **Multiple Account Fraud**: Detects when the same device is used to create multiple accounts
+3. **Referral Code Abuse**: Prevents abuse of referral codes from the same device
+
+### How It Works
+
+The system compares fingerprint data using these critical fields:
+- Platform (Windows, Mac, Linux, etc.)
+- Vendor (Google Inc., Apple Inc., etc.)
+- User Agent (browser and OS information)
+- Screen Resolution
+- Hardware Concurrency (CPU cores)
+- Max Touch Points
+- Timezone
+- Language
+
+### Fraud Detection Threshold
+
+The system uses a similarity threshold of 70% (0.7) by default. This means:
+- If 70% or more of the critical fingerprint fields match, it's considered the same device
+- You can adjust this threshold based on your security requirements
+
+### Important: User Registration vs Points Awarding
+
+**Users are always registered successfully**, even when fraud is detected. However:
+
+- ✅ **Registration**: Always succeeds
+- ❌ **Points Awarding**: Only happens for legitimate referrals from different devices
+- 🔍 **Fraud Detection**: Prevents point abuse while maintaining user experience
+
+### Registration Response Examples
+
+**Successful registration with legitimate referral:**
+```javascript
+{
+  "message": "User registered successfully",
+  "user": { /* user data */ },
+  "token": "jwt_token",
+  "referralInfo": {
+    "referrerName": "John Doe",
+    "pointsAwarded": 0,
+    "referrerPointsAwarded": 100,
+    "fraudCheckPassed": true
+  }
+}
+```
+
+**Successful registration with fraud detected:**
+```javascript
+{
+  "message": "User registered successfully",
+  "user": { /* user data */ },
+  "token": "jwt_token",
+  "referralInfo": {
+    "fraudDetected": true,
+    "fraudMessage": "Fraud detected: Same device attempting to refer itself",
+    "pointsAwarded": 0,
+    "referrerPointsAwarded": 0,
+    "note": "User registered successfully but referral points were not awarded due to fraud detection"
+  }
+}
+```
 
 ## Utility Methods
 

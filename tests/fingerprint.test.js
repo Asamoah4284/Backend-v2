@@ -100,6 +100,100 @@ describe('Fingerprint API Tests', () => {
       // Clean up
       await User.deleteOne({ email: 'n@h.com' });
     });
+
+    it('should register user but not award points when fraud is detected', async () => {
+      // First, create a referrer user with a fingerprint
+      const referrerUser = new User({
+        email: 'referrer@example.com',
+        password: 'TestPass123',
+        name: 'Referrer User',
+        userType: 'customer',
+        fingerprint: sampleFingerprint
+      });
+      await referrerUser.save();
+
+      // Try to register a new user with the same fingerprint and referral code
+      const response = await request(app)
+        .post('/auth/register')
+        .send({
+          email: 'fraud@example.com',
+          password: 'TestPass123',
+          name: 'Fraud User',
+          userType: 'customer',
+          enteredReferralCode: referrerUser.myReferralCode,
+          fingerprint: sampleFingerprint // Same fingerprint as referrer
+        });
+
+      // User should be registered successfully
+      expect(response.status).toBe(201);
+      expect(response.body.user.email).toBe('fraud@example.com');
+      expect(response.body.user.name).toBe('Fraud User');
+
+      // But fraud should be detected and no points awarded
+      expect(response.body.referralInfo).toBeDefined();
+      expect(response.body.referralInfo.fraudDetected).toBe(true);
+      expect(response.body.referralInfo.pointsAwarded).toBe(0);
+      expect(response.body.referralInfo.referrerPointsAwarded).toBe(0);
+      expect(response.body.referralInfo.note).toContain('referral points were not awarded due to fraud detection');
+
+      // Verify referrer didn't get points
+      const updatedReferrer = await User.findById(referrerUser._id);
+      expect(updatedReferrer.points).toBe(0); // Should still have 0 points
+
+      // Clean up
+      await User.deleteOne({ email: 'referrer@example.com' });
+      await User.deleteOne({ email: 'fraud@example.com' });
+    });
+
+    it('should register user and award points when no fraud is detected', async () => {
+      // First, create a referrer user with a fingerprint
+      const referrerUser = new User({
+        email: 'referrer@example.com',
+        password: 'TestPass123',
+        name: 'Referrer User',
+        userType: 'customer',
+        fingerprint: sampleFingerprint
+      });
+      await referrerUser.save();
+
+      // Register a new user with different fingerprint and referral code
+      const differentFingerprint = {
+        ...sampleFingerprint,
+        platform: 'MacIntel',
+        vendor: 'Apple Inc.',
+        userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
+        visitorId: 'different-visitor-id-123'
+      };
+
+      const response = await request(app)
+        .post('/auth/register')
+        .send({
+          email: 'legitimate@example.com',
+          password: 'TestPass123',
+          name: 'Legitimate User',
+          userType: 'customer',
+          enteredReferralCode: referrerUser.myReferralCode,
+          fingerprint: differentFingerprint // Different fingerprint
+        });
+
+      // User should be registered successfully
+      expect(response.status).toBe(201);
+      expect(response.body.user.email).toBe('legitimate@example.com');
+
+      // Points should be awarded normally
+      expect(response.body.referralInfo).toBeDefined();
+      expect(response.body.referralInfo.fraudCheckPassed).toBe(true);
+      expect(response.body.referralInfo.pointsAwarded).toBe(0); // New user gets 0 points
+      expect(response.body.referralInfo.referrerPointsAwarded).toBe(100); // Referrer gets 100 points
+
+      // Verify referrer got points
+      const updatedReferrer = await User.findById(referrerUser._id);
+      expect(updatedReferrer.points).toBe(100); // Should have 100 points
+
+      // Clean up
+      await User.deleteOne({ email: 'referrer@example.com' });
+      await User.deleteOne({ email: 'legitimate@example.com' });
+    });
   });
 
   describe('POST /auth/login with fingerprint', () => {
@@ -175,6 +269,134 @@ describe('Fingerprint API Tests', () => {
         timezone: 'Europe/London'
       });
       expect(similarUsers.length).toBeGreaterThan(0);
+    });
+
+    it('should detect same device fingerprints', () => {
+      const fingerprint1 = {
+        platform: 'Win32',
+        vendor: 'Google Inc.',
+        userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        screenResolution: '1920x1080',
+        hardwareConcurrency: 8,
+        maxTouchPoints: 0,
+        timezone: 'Africa/Accra',
+        language: 'en-US'
+      };
+
+      const fingerprint2 = {
+        platform: 'Win32',
+        vendor: 'Google Inc.',
+        userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        screenResolution: '1920x1080',
+        hardwareConcurrency: 8,
+        maxTouchPoints: 0,
+        timezone: 'Africa/Accra',
+        language: 'en-US'
+      };
+
+      const isSameDevice = User.isSameDevice(fingerprint1, fingerprint2, 0.7);
+      expect(isSameDevice).toBe(true);
+    });
+
+    it('should detect different device fingerprints', () => {
+      const fingerprint1 = {
+        platform: 'Win32',
+        vendor: 'Google Inc.',
+        userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        screenResolution: '1920x1080',
+        hardwareConcurrency: 8,
+        maxTouchPoints: 0,
+        timezone: 'Africa/Accra',
+        language: 'en-US'
+      };
+
+      const fingerprint2 = {
+        platform: 'MacIntel',
+        vendor: 'Apple Inc.',
+        userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
+        screenResolution: '2560x1600',
+        hardwareConcurrency: 16,
+        maxTouchPoints: 0,
+        timezone: 'America/New_York',
+        language: 'en-US'
+      };
+
+      const isSameDevice = User.isSameDevice(fingerprint1, fingerprint2, 0.7);
+      expect(isSameDevice).toBe(false);
+    });
+  });
+
+  describe('POST /auth/check-fingerprint-fraud', () => {
+    it('should detect fraud when same device tries to refer itself', async () => {
+      // First, create a user with a fingerprint
+      const userWithFingerprint = new User({
+        email: 'referrer@example.com',
+        password: 'TestPass123',
+        name: 'Referrer User',
+        userType: 'customer',
+        fingerprint: sampleFingerprint
+      });
+      await userWithFingerprint.save();
+
+      // Check for fraud using the same fingerprint
+      const response = await request(app)
+        .post('/auth/check-fingerprint-fraud')
+        .send({
+          fingerprint: sampleFingerprint,
+          referralCode: userWithFingerprint.myReferralCode
+        });
+
+      expect(response.status).toBe(200);
+      expect(response.body.fraudDetected).toBe(true);
+      expect(response.body.checks.sameDeviceReferral).toBe(true);
+
+      // Clean up
+      await User.deleteOne({ email: 'referrer@example.com' });
+    });
+
+    it('should detect fraud when fingerprint matches existing user', async () => {
+      // Check for fraud using the test user's fingerprint
+      const response = await request(app)
+        .post('/auth/check-fingerprint-fraud')
+        .send({
+          fingerprint: {
+            platform: 'Linux',
+            vendor: 'Mozilla',
+            timezone: 'Europe/London',
+            userAgent: 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36',
+            screenResolution: '1920x1080',
+            hardwareConcurrency: 8,
+            maxTouchPoints: 0,
+            language: 'en-US'
+          }
+        });
+
+      expect(response.status).toBe(200);
+      // Should detect fraud if the fingerprint matches the test user
+      expect(response.body.fraudDetected).toBeDefined();
+    });
+
+    it('should pass fraud check for new fingerprint', async () => {
+      const newFingerprint = {
+        platform: 'Android',
+        vendor: 'Samsung',
+        timezone: 'Asia/Tokyo',
+        userAgent: 'Mozilla/5.0 (Linux; Android 10; SM-G973F) AppleWebKit/537.36',
+        screenResolution: '1440x2960',
+        hardwareConcurrency: 8,
+        maxTouchPoints: 5,
+        language: 'ja-JP'
+      };
+
+      const response = await request(app)
+        .post('/auth/check-fingerprint-fraud')
+        .send({
+          fingerprint: newFingerprint
+        });
+
+      expect(response.status).toBe(200);
+      expect(response.body.fraudDetected).toBe(false);
+      expect(response.body.message).toBe('Fingerprint check passed');
     });
   });
 }); 

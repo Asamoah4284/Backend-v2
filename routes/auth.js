@@ -81,12 +81,22 @@ router.post('/register', registerValidation, handleValidationErrors, async (req,
 
     // Award referral points if valid referrer code was used
     let referralResult = null;
+    let fraudDetected = false;
+    let fraudDetails = null;
+    
     if (enteredReferralCode && referrer) {
       try {
-        referralResult = await User.awardReferralPoints(enteredReferralCode, user._id);
+        referralResult = await User.awardReferralPoints(enteredReferralCode, user._id, fingerprint);
       } catch (error) {
         console.error('Error awarding referral points:', error);
-        // Don't fail registration if referral points fail
+        
+        // If it's a fraud error, note it but don't fail registration
+        if (error.message.includes('Fraud detected')) {
+          fraudDetected = true;
+          fraudDetails = error.message;
+          console.log('Referral fraud detected - user registered but no points awarded');
+        }
+        // Don't fail registration if other referral points errors occur
       }
     }
 
@@ -118,7 +128,19 @@ router.post('/register', registerValidation, handleValidationErrors, async (req,
       responseData.referralInfo = {
         referrerName: referrer.name,
         pointsAwarded: referralResult.newUserPointsAwarded,
-        referrerPointsAwarded: referralResult.referrerPointsAwarded
+        referrerPointsAwarded: referralResult.referrerPointsAwarded,
+        fraudCheckPassed: true
+      };
+    }
+
+    // Add fraud information if fraud was detected
+    if (fraudDetected) {
+      responseData.referralInfo = {
+        fraudDetected: true,
+        fraudMessage: fraudDetails,
+        pointsAwarded: 0,
+        referrerPointsAwarded: 0,
+        note: "User registered successfully but referral points were not awarded due to fraud detection"
       };
     }
 
@@ -254,6 +276,66 @@ router.get('/fingerprint/:userId', async (req, res) => {
     console.error('Get fingerprint error:', error);
     res.status(500).json({
       error: 'Failed to get fingerprint data',
+      message: error.message
+    });
+  }
+});
+
+// POST /auth/check-fingerprint-fraud
+router.post('/check-fingerprint-fraud', async (req, res) => {
+  try {
+    const { fingerprint, referralCode } = req.body;
+
+    if (!fingerprint) {
+      return res.status(400).json({
+        error: 'Fingerprint data is required'
+      });
+    }
+
+    const fraudChecks = {
+      sameDeviceReferral: false,
+      multipleAccounts: false,
+      details: {}
+    };
+
+    // Check if fingerprint matches any existing user
+    const existingUserWithSameFingerprint = await User.findMatchingFingerprint(fingerprint, 0.7);
+    if (existingUserWithSameFingerprint) {
+      fraudChecks.multipleAccounts = true;
+      fraudChecks.details.existingUser = {
+        id: existingUserWithSameFingerprint._id,
+        email: existingUserWithSameFingerprint.email,
+        name: existingUserWithSameFingerprint.name
+      };
+    }
+
+    // Check for same device referral fraud if referral code is provided
+    if (referralCode) {
+      const referrer = await User.findByReferralCode(referralCode);
+      if (referrer && referrer.fingerprint) {
+        const isSameDevice = User.isSameDevice(referrer.fingerprint, fingerprint, 0.7);
+        if (isSameDevice) {
+          fraudChecks.sameDeviceReferral = true;
+          fraudChecks.details.referrer = {
+            id: referrer._id,
+            email: referrer.email,
+            name: referrer.name
+          };
+        }
+      }
+    }
+
+    const hasFraud = fraudChecks.sameDeviceReferral || fraudChecks.multipleAccounts;
+
+    res.json({
+      fraudDetected: hasFraud,
+      checks: fraudChecks,
+      message: hasFraud ? 'Fraud detected in fingerprint data' : 'Fingerprint check passed'
+    });
+  } catch (error) {
+    console.error('Fingerprint fraud check error:', error);
+    res.status(500).json({
+      error: 'Fingerprint fraud check failed',
       message: error.message
     });
   }

@@ -210,7 +210,7 @@ userSchema.statics.findByReferralCode = function(referralCode) {
 };
 
 // Award referral points to both referrer and new user
-userSchema.statics.awardReferralPoints = async function(referralCode, newUserId) {
+userSchema.statics.awardReferralPoints = async function(referralCode, newUserId, newUserFingerprint = null) {
   try {
     // Find the referrer by their referral code
     const referrer = await this.findByReferralCode(referralCode);
@@ -224,6 +224,20 @@ userSchema.statics.awardReferralPoints = async function(referralCode, newUserId)
       throw new Error('New user not found');
     }
 
+    // Check for fingerprint fraud if fingerprint data is provided
+    if (newUserFingerprint) {
+      // Check if this fingerprint matches the referrer's fingerprint (self-referral fraud)
+      if (referrer.fingerprint && this.isSameDevice(referrer.fingerprint, newUserFingerprint, 0.7)) {
+        throw new Error('Fraud detected: Same device attempting to refer itself');
+      }
+
+      // Check if this fingerprint matches any existing user (multiple account fraud)
+      const existingUserWithSameFingerprint = await this.findMatchingFingerprint(newUserFingerprint, 0.7);
+      if (existingUserWithSameFingerprint && existingUserWithSameFingerprint._id.toString() !== newUserId.toString()) {
+        throw new Error('Fraud detected: Multiple accounts detected from same device');
+      }
+    }
+
     // Award points to referrer (100 points for successful referral)
     await referrer.addPoints(100);
 
@@ -234,7 +248,8 @@ userSchema.statics.awardReferralPoints = async function(referralCode, newUserId)
       referrer: referrer,
       newUser: newUser,
       referrerPointsAwarded: 100,
-      newUserPointsAwarded: 0
+      newUserPointsAwarded: 0,
+      fraudCheckPassed: true
     };
   } catch (error) {
     throw error;
@@ -269,7 +284,7 @@ userSchema.statics.findByVisitorId = function(visitorId) {
   return this.findOne({ 'fingerprint.visitorId': visitorId });
 };
 
-// Find users with similar fingerprint components (for fraud detection)
+// Find users with similar fingerprints (for fraud detection)
 userSchema.statics.findSimilarFingerprints = function(fingerprintData, threshold = 0.8) {
   // This is a basic implementation - you might want to implement more sophisticated
   // fingerprint comparison logic based on your specific requirements
@@ -295,6 +310,76 @@ userSchema.statics.findSimilarFingerprints = function(fingerprintData, threshold
   }
   
   return this.find(query);
+};
+
+// Check if two fingerprints are from the same device
+userSchema.statics.isSameDevice = function(fingerprint1, fingerprint2, threshold = 0.7) {
+  if (!fingerprint1 || !fingerprint2) {
+    return false;
+  }
+
+  let matchCount = 0;
+  let totalChecks = 0;
+
+  // Check critical device identifiers
+  const criticalFields = [
+    'platform',
+    'vendor', 
+    'userAgent',
+    'screenResolution',
+    'hardwareConcurrency',
+    'maxTouchPoints'
+  ];
+
+  criticalFields.forEach(field => {
+    if (fingerprint1[field] && fingerprint2[field]) {
+      totalChecks++;
+      if (fingerprint1[field] === fingerprint2[field]) {
+        matchCount++;
+      }
+    }
+  });
+
+  // Check timezone (should be the same for same device)
+  if (fingerprint1.timezone && fingerprint2.timezone) {
+    totalChecks++;
+    if (fingerprint1.timezone === fingerprint2.timezone) {
+      matchCount++;
+    }
+  }
+
+  // Check language (should be the same for same device)
+  if (fingerprint1.language && fingerprint2.language) {
+    totalChecks++;
+    if (fingerprint1.language === fingerprint2.language) {
+      matchCount++;
+    }
+  }
+
+  // Calculate similarity score
+  const similarityScore = totalChecks > 0 ? matchCount / totalChecks : 0;
+  
+  return similarityScore >= threshold;
+};
+
+// Check if fingerprint matches any existing user (for fraud detection)
+userSchema.statics.findMatchingFingerprint = function(fingerprintData, threshold = 0.7) {
+  return new Promise(async (resolve, reject) => {
+    try {
+      const allUsers = await this.find({ 'fingerprint.visitorId': { $exists: true } });
+      
+      for (const user of allUsers) {
+        if (user.fingerprint && this.isSameDevice(user.fingerprint, fingerprintData, threshold)) {
+          resolve(user);
+          return;
+        }
+      }
+      
+      resolve(null);
+    } catch (error) {
+      reject(error);
+    }
+  });
 };
 
 // Get user without password
