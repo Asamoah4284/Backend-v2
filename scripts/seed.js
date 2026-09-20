@@ -73,7 +73,8 @@ const sampleProducts = [
   // Aisha's products
   {
     name: 'Traditional Yoruba Wrapper',
-    price: 89.99,
+    price: 1400,
+    currency: 'GHS',
     imageUrl: 'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=400',
     description: 'Handwoven cotton wrapper with traditional Yoruba patterns. Perfect for special occasions and cultural celebrations.',
     category: 'Textiles',
@@ -82,7 +83,8 @@ const sampleProducts = [
   },
   {
     name: 'Adire Indigo Scarf',
-    price: 45.00,
+    price: 700,
+    currency: 'GHS',
     imageUrl: 'https://images.unsplash.com/photo-1523381210434-271e8be1f52b?w=400',
     description: 'Beautiful indigo-dyed scarf using traditional Adire techniques. Each piece is unique and tells a story.',
     category: 'Accessories',
@@ -93,7 +95,8 @@ const sampleProducts = [
   // Kwame's products
   {
     name: 'Ashanti Stool',
-    price: 299.99,
+    price: 4650,
+    currency: 'GHS',
     imageUrl: 'https://images.unsplash.com/photo-1586023492125-27b2c045efd7?w=400',
     description: 'Hand-carved Ashanti stool with traditional symbols. A piece of cultural heritage for your home.',
     category: 'Furniture',
@@ -102,7 +105,8 @@ const sampleProducts = [
   },
   {
     name: 'Ceremonial Mask',
-    price: 199.99,
+    price: 3100,
+    currency: 'GHS',
     imageUrl: 'https://images.unsplash.com/photo-1578662996442-48f60103fc96?w=400',
     description: 'Intricately carved ceremonial mask representing Ashanti spiritual traditions.',
     category: 'Decor',
@@ -113,7 +117,8 @@ const sampleProducts = [
   // Fatima's products
   {
     name: 'Moroccan Tea Set',
-    price: 129.99,
+    price: 2000,
+    currency: 'GHS',
     imageUrl: 'https://images.unsplash.com/photo-1544787219-7f47ccb76574?w=400',
     description: 'Handcrafted ceramic tea set with traditional Moroccan geometric patterns.',
     category: 'Kitchenware',
@@ -122,7 +127,8 @@ const sampleProducts = [
   },
   {
     name: 'Decorative Plate',
-    price: 79.99,
+    price: 1240,
+    currency: 'GHS',
     imageUrl: 'https://images.unsplash.com/photo-1578662996442-48f60103fc96?w=400',
     description: 'Beautiful decorative plate perfect for wall display or special occasions.',
     category: 'Decor',
@@ -133,7 +139,8 @@ const sampleProducts = [
   // David's products
   {
     name: 'Recycled Bead Necklace',
-    price: 65.00,
+    price: 1000,
+    currency: 'GHS',
     imageUrl: 'https://images.unsplash.com/photo-1515562141207-7a88fb7ce338?w=400',
     description: 'Handcrafted necklace using recycled materials and traditional Kenyan beadwork.',
     category: 'Jewelry',
@@ -142,7 +149,8 @@ const sampleProducts = [
   },
   {
     name: 'Bone Carved Bracelet',
-    price: 45.00,
+    price: 700,
+    currency: 'GHS',
     imageUrl: 'https://images.unsplash.com/photo-1605100804763-247f67b3557e?w=400',
     description: 'Elegant bracelet carved from sustainable bone materials with traditional patterns.',
     category: 'Jewelry',

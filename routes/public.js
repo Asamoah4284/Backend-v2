@@ -21,6 +21,7 @@ router.get('/products/:id', async (req, res) => {
         id: product._id,
         name: product.name,
         price: product.price,
+        currency: product.currency || 'GHS',
         imageUrl: product.imageUrl,
         description: product.description,
         category: product.category,
@@ -42,7 +43,7 @@ router.get('/products/:id', async (req, res) => {
 router.get('/artisans/:id', async (req, res) => {
   try {
     const artisan = await Artisan.findById(req.params.id)
-      .populate('products', 'name price imageUrl description category isAvailable')
+      .populate('products', 'name price currency imageUrl description category isAvailable')
       .select('-__v');
 
     if (!artisan) {
@@ -89,7 +90,7 @@ router.get('/artisans', async (req, res) => {
     }
 
     const artisans = await Artisan.find(query)
-      .populate('products', 'name price imageUrl')
+      .populate('products', 'name price currency imageUrl')
       .limit(limit * 1)
       .skip((page - 1) * limit)
       .select('-__v')
@@ -159,6 +160,7 @@ router.get('/products', async (req, res) => {
         id: product._id,
         name: product.name,
         price: product.price,
+        currency: product.currency || 'GHS',
         imageUrl: product.imageUrl,
         description: product.description,
         category: product.category,

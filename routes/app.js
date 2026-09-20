@@ -39,6 +39,7 @@ router.get('/dashboard', auth, async (req, res) => {
                 _id: product._id,
                 name: product.name,
                 price: product.price,
+                currency: product.currency || 'GHS',
                 imageUrl: product.imageUrl,
                 artisan: product.artisan ? {
                   _id: product.artisan._id,

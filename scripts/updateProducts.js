@@ -27,7 +27,7 @@ async function updateProducts() {
     const products = await Product.find({});
     console.log('\n📦 Current products:');
     products.forEach(product => {
-      console.log(`- ${product.name}: $${product.price} (Available: ${product.isAvailable}, Stock: ${product.stockQuantity})`);
+      console.log(`- ${product.name}: GH₵${product.price} (Available: ${product.isAvailable}, Stock: ${product.stockQuantity})`);
     });
 
   } catch (error) {
